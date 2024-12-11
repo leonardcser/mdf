@@ -1,4 +1,4 @@
-use crate::lexer::{self};
+use crate::lexer;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ pub fn process_file(file: &Path) -> io::Result<()> {
         )
     })?;
     let reader = BufReader::new(file);
-    let tokens = lexer::tokenize(reader.lines()).map_err(|e| {
+    let tokens = lexer::lex(reader.lines()).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("Tokenization error: {}", e),
