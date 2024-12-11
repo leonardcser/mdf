@@ -1,3 +1,3 @@
 # MDF
 
-A markdown formatter native executable without external dependencies
+A markdown formatter native executable without external dependencies (soon)

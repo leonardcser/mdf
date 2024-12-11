@@ -1,5 +1,5 @@
 mod io;
-mod tokenizer;
+mod lexer;
 
 use clap::Parser;
 use std::process;
