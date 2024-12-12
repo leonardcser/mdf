@@ -1,24 +1,21 @@
-use crate::lexer;
+use crate::lexer::lexer::Lexer;
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, ErrorKind};
+use std::io::{self, ErrorKind, Read};
 use std::path::{Path, PathBuf};
 
 /// Processes a single file (line by line tokenization)
 pub fn process_file(file: &Path) -> io::Result<()> {
-    let file = File::open(file).map_err(|e| {
+    let mut file = File::open(file).map_err(|e| {
         io::Error::new(
             io::ErrorKind::NotFound,
             format!("Failed to open {}: {}", file.display(), e),
         )
     })?;
-    let reader = BufReader::new(file);
-    let tokens = lexer::lex(reader.lines()).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Tokenization error: {}", e),
-        )
-    })?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)?;
 
+    let lexer = Lexer::new(&content);
+    let tokens = lexer.collect::<Vec<_>>();
     dbg!(tokens);
 
     Ok(())

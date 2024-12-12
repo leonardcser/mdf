@@ -1,25 +1,39 @@
-use std::{iter::Peekable, str::CharIndices};
-
-enum TokenKind {
+#[derive(Clone, Debug, PartialEq)]
+pub enum TokenKind {
     // Special
-    EOF,
-    Invalid,
+    Illegal,
     // Multiline
     FrontMatter,
     CodeBlock,
     // Single line
-    Heading,
+    Heading(HeadingToken),
     // Slices
-    Word,
+    Word, // Normal words + bolds / italics
     InlineCode,
     Link,
     ListStart,
     ListEnd,
+    // Extras
+    Newline,
+    Whitespace,
+    Comment,
 }
 
-struct Token<'s> {
-    kind: TokenKind,
-    text: &'s str,
+#[derive(Clone, Debug, PartialEq)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub text: String,
+}
+
+impl Token {
+    pub fn new(kind: TokenKind, text: String) -> Self {
+        Self { kind, text }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HeadingToken {
+    pub level: u8,
 }
 
 // #[derive(Debug, PartialEq, Clone)]

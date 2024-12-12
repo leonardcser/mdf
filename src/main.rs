@@ -1,4 +1,4 @@
-// mod io;
+mod io;
 mod lexer;
 
 use clap::Parser;
@@ -14,10 +14,10 @@ struct Cli {
 }
 
 fn main() {
-    // let args = Cli::parse();
-    //
-    // if let Err(e) = io::process_paths(&args.input) {
-    //     eprintln!("Error: {}", e);
-    //     process::exit(1);
-    // }
+    let args = Cli::parse();
+
+    if let Err(e) = io::process_paths(&args.input) {
+        eprintln!("Error: {}", e);
+        process::exit(1);
+    }
 }

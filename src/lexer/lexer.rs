@@ -1,341 +1,285 @@
+use crate::lexer::tokens::TokenKind::*;
 use crate::lexer::tokens::*;
 use std::iter::Peekable;
 use std::str::CharIndices;
 
-struct Lexer<'s> {
+pub struct Lexer<'s> {
     source: &'s str,
     chars: Peekable<CharIndices<'s>>,
-    current: Option<(usize, usize)>,
+    current: Option<(usize, char)>,
 }
 
-// /// Tokenizes the lines of a file. It returns a vector of tokens
-// pub fn lex<I>(lines: I) -> Result<Vec<Token>, io::Error>
-// where
-//     I: IntoIterator<Item = Result<String, io::Error>>,
-// {
-//     let mut tokens = Vec::new();
-//     let mut lines = lines.into_iter();
-//
-//     while let Some(line_result) = lines.next() {
-//         let line = line_result?;
-//         let trimmed_line = line.trim_start();
-//
-//         // Check for front matter
-//         if trimmed_line == "---" {
-//             tokens.push(consume_block(&mut lines, BlockKind::FrontMatter)?);
-//             continue;
-//         }
-//
-//         // Check for code block
-//         if trimmed_line.starts_with("```") {
-//             tokens.push(consume_block(&mut lines, BlockKind::CodeBlock)?);
-//             continue;
-//         }
-//
-//         // Handle headings
-//         if line.starts_with("#") {
-//             let level = line.chars().take_while(|&c| c == '#').count();
-//             let content = line[level..].trim().to_string();
-//             tokens.push(Token::Heading(HeadingToken { level, content }));
-//             continue;
-//         }
-//
-//         // Handle lists
-//         if trimmed_line.starts_with("- ") {
-//             tokens.push(consume_list(&mut lines, line)?);
-//             continue;
-//         }
-//
-//         // Handle paragraphs
-//         if !line.trim().is_empty() {
-//             tokens.push(consume_paragraph(&mut lines, line)?);
-//             continue;
-//         }
-//     }
-//
-//     Ok(tokens)
-// }
-//
-// fn consume_block<I>(lines: &mut I, kind: BlockKind) -> Result<Token, io::Error>
-// where
-//     I: Iterator<Item = Result<String, io::Error>>,
-// {
-//     let mut content = String::new();
-//
-//     while let Some(line_result) = lines.next() {
-//         let line = line_result?;
-//
-//         // Check for block termination
-//         if line.trim_start() == "---" || line.trim_start().starts_with("```") {
-//             break;
-//         }
-//
-//         content.push_str(&line);
-//         content.push('\n');
-//     }
-//
-//     Ok(Token::Block(BlockToken { kind, content }))
-// }
-//
-// fn consume_paragraph<I>(lines: &mut I, first_line: String) -> Result<Token, io::Error>
-// where
-//     I: Iterator<Item = Result<String, io::Error>>,
-// {
-//     let mut paragraph_words = lex_words(&first_line);
-//
-//     while let Some(line_result) = lines.next() {
-//         let line = line_result?;
-//
-//         // Stop if line is empty
-//         if line.trim().is_empty() {
-//             break;
-//         }
-//
-//         // Extend paragraph words
-//         paragraph_words.extend(lex_words(&line));
-//     }
-//
-//     Ok(Token::Paragraph(ParagraphToken {
-//         words: paragraph_words,
-//     }))
-// }
-//
-// fn consume_list<I>(lines: &mut I, first_line: String) -> Result<Token, io::Error>
-// where
-//     I: Iterator<Item = Result<String, io::Error>>,
-// {
-//     let mut list_stack: Vec<ListToken> = Vec::new();
-//
-//     // Create the first list at the base level
-//     let base_indent = first_line.chars().take_while(|c| c.is_whitespace()).count();
-//     let first_item_content = first_line.trim_start_matches(|c: char| c == '-' || c.is_whitespace());
-//
-//     let mut current_list = ListToken {
-//         level: base_indent,
-//         items: vec![ListItem {
-//             kind: ListKind::Unordered,
-//             content: vec![Token::Paragraph(ParagraphToken {
-//                 words: lex_words(first_item_content),
-//             })],
-//         }],
-//     };
-//
-//     // Prepare to track the last processed indent
-//     let mut last_indent = base_indent;
-//
-//     // Continue processing subsequent list items
-//     while let Some(line_result) = lines.next() {
-//         let line = line_result?;
-//         let trimmed_line = line.trim_start();
-//
-//         // Check if line is a list item
-//         if trimmed_line.starts_with("- ") || trimmed_line.starts_with('-') {
-//             let item_indent = line.chars().take_while(|c| c.is_whitespace()).count();
-//             let item_content =
-//                 trimmed_line.trim_start_matches(|c: char| c == '-' || c.is_whitespace());
-//
-//             let new_item = ListItem {
-//                 kind: ListKind::Unordered,
-//                 content: vec![Token::Paragraph(ParagraphToken {
-//                     words: lex_words(item_content),
-//                 })],
-//             };
-//
-//             // Determine list nesting
-//             if item_indent > last_indent {
-//                 // Start a new nested list
-//                 let nested_list = ListToken {
-//                     level: item_indent,
-//                     items: vec![new_item],
-//                 };
-//
-//                 // Add the nested list to the last item of the current list
-//                 if let Some(last_item) = current_list.items.last_mut() {
-//                     last_item.content.push(Token::List(nested_list.clone()));
-//                 }
-//
-//                 // Keep track of the nested list
-//                 list_stack.push(current_list);
-//                 current_list = nested_list;
-//             } else if item_indent < last_indent {
-//                 // Move back up the list hierarchy
-//                 while let Some(mut parent_list) = list_stack.pop() {
-//                     if item_indent >= parent_list.level {
-//                         // Add current list to parent's last item
-//                         if let Some(last_item) = parent_list.items.last_mut() {
-//                             last_item.content.push(Token::List(current_list));
-//                         }
-//                         current_list = parent_list;
-//
-//                         // Add new item to the current list at this level
-//                         current_list.items.push(new_item);
-//                         break;
-//                     }
-//                 }
-//             } else {
-//                 // Same level, just add a new item
-//                 current_list.items.push(new_item);
-//             }
-//
-//             last_indent = item_indent;
-//         } else if line.trim().is_empty() {
-//             // End of list
-//             break;
-//         } else {
-//             // Continuation of previous list item
-//             if let Some(last_item) = current_list.items.last_mut() {
-//                 // Add additional content to the last list item
-//                 last_item.content.push(Token::Paragraph(ParagraphToken {
-//                     words: lex_words(line.trim()),
-//                 }));
-//             }
-//         }
-//     }
-//
-//     // Handle any remaining nested lists
-//     while let Some(mut parent_list) = list_stack.pop() {
-//         if let Some(last_item) = parent_list.items.last_mut() {
-//             last_item.content.push(Token::List(current_list));
-//         }
-//         current_list = parent_list;
-//     }
-//
-//     Ok(Token::List(current_list))
-// }
-//
-// /// Tokenizes a line into individual words, identifying inline code, bold, and normal words
-// fn lex_words(line: &str) -> Vec<WordToken> {
-//     let mut words = Vec::new();
-//     let mut word = String::new();
-//     let mut inline_code = false;
-//     let mut bold = false;
-//     let mut italic = false;
-//     let mut chars = line.chars().peekable();
-//
-//     while let Some(c) = chars.next() {
-//         match c {
-//             '`' => {
-//                 // Inline code logic
-//                 if inline_code {
-//                     push_word(&mut words, &mut word, WordKind::InlineCode);
-//                     inline_code = false;
-//                 } else {
-//                     // Collect content inside backticks as a single word token
-//                     let mut inline_code_content = String::new();
-//                     while let Some(&next_c) = chars.peek() {
-//                         if next_c == '`' {
-//                             chars.next(); // Skip the closing '`' for inline code
-//                             break;
-//                         }
-//                         inline_code_content.push(chars.next().unwrap());
-//                     }
-//                     push_word(&mut words, &mut inline_code_content, WordKind::InlineCode);
-//                 }
-//             }
-//             '*' => {
-//                 if let Some(&next_char) = chars.peek() {
-//                     if next_char == '*' {
-//                         // Bold logic (handle `**`)
-//                         if bold {
-//                             push_word(&mut words, &mut word, WordKind::Bold);
-//                             bold = false;
-//                         } else {
-//                             // Collect content inside `**` as a single word token
-//                             let mut bold_content = String::new();
-//                             chars.next(); // Skip the second '*' in `**`
-//                             while let Some(&next_c) = chars.peek() {
-//                                 if next_c == '*' {
-//                                     chars.next(); // Skip the '*' that ends the bold
-//                                     if let Some(&next_next_c) = chars.peek() {
-//                                         if next_next_c == '*' {
-//                                             chars.next(); // Skip the second '*' to complete the bold
-//                                             break;
-//                                         }
-//                                     }
-//                                 }
-//                                 bold_content.push(chars.next().unwrap());
-//                             }
-//                             push_word(&mut words, &mut bold_content, WordKind::Bold);
-//                         }
-//                     } else if italic {
-//                         push_word(&mut words, &mut word, WordKind::Italic);
-//                         italic = false;
-//                     } else {
-//                         push_word(&mut words, &mut word, WordKind::Normal);
-//                         italic = true;
-//                     }
-//                 }
-//             }
-//             ' ' => {
-//                 // Space logic
-//                 push_word(&mut words, &mut word, WordKind::Normal);
-//                 word.clear(); // Prepare for next word
-//             }
-//             _ => word.push(c),
-//         }
-//     }
-//
-//     // Handle remaining word
-//     if !word.is_empty() {
-//         words.push(WordToken {
-//             text: word,
-//             kind: WordKind::Normal,
-//         });
-//     }
-//
-//     words
-// }
-//
-// /// Helper function to push words to the token list
-// fn push_word(words: &mut Vec<WordToken>, word: &mut String, kind: WordKind) {
-//     if !word.is_empty() {
-//         words.push(WordToken {
-//             text: word.clone(),
-//             kind,
-//         });
-//         word.clear();
-//     }
-// }
-//
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//
-//     #[test]
-//     fn test_tokenize_heading_1() {
-//         let input = "# Heading 1";
-//         let tokens = lex(input.lines().map(|line| Ok(line.to_string()))).unwrap();
-//         assert_eq!(
-//             tokens,
-//             vec![Token::Heading(HeadingToken {
-//                 level: 1,
-//                 content: "Heading 1".to_string(),
-//             })]
-//         );
-//     }
-//
-//     #[test]
-//     fn test_tokenize_heading_4() {
-//         let input = "#### Heading 4";
-//         let tokens = lex(input.lines().map(|line| Ok(line.to_string()))).unwrap();
-//         assert_eq!(
-//             tokens,
-//             vec![Token::Heading(HeadingToken {
-//                 level: 4,
-//                 content: "Heading 4".to_string(),
-//             })]
-//         );
-//     }
-//     #[test]
-//     fn test_tokenize_code_block() {
-//         let input = "```\nfn main() {}\n```";
-//         let tokens = lex(input.lines().map(|line| Ok(line.to_string()))).unwrap();
-//         assert_eq!(
-//             tokens,
-//             vec![Token::Block(BlockToken {
-//                 kind: BlockKind::CodeBlock,
-//                 content: "fn main() {}\n".to_string(),
-//             })]
-//         );
-//     }
-// }
+impl<'s> Iterator for Lexer<'s> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.consume_char();
+        let (_start, ch) = self.current?;
+        let token = match ch {
+            '\n' => self.yield_token(Newline),
+            ' ' => self.yield_token(Whitespace),
+            _ if self.is_heading() => self.consume_heading(),
+            ch if self.is_word(ch) => Token::new(Word, self.consume_word()),
+            _ => self.yield_token(Illegal),
+        };
+        Some(token)
+    }
+}
+
+impl<'s> Lexer<'s> {
+    pub fn new(string: &'s str) -> Self {
+        Self {
+            source: string,
+            chars: string.char_indices().peekable(),
+            current: None,
+        }
+    }
+
+    fn consume_char(&mut self) {
+        self.current = self.chars.next();
+    }
+
+    fn yield_token(&self, kind: TokenKind) -> Token {
+        let start = self.current.unwrap().0;
+        Token::new(kind, self.source[start..start + 1].to_string())
+    }
+
+    fn peek_chars(&self, count: usize) -> Vec<Option<(usize, char)>> {
+        let mut peek_chars = self.chars.clone();
+        (0..count).map(|_| peek_chars.next()).collect()
+    }
+
+    fn is_heading(&self) -> bool {
+        let (_, ch) = match self.current {
+            Some((idx, ch)) => (idx, ch),
+            None => return false,
+        };
+
+        // If not at the start, check if preceded by a newline
+        if ch != '#' {
+            return false;
+        }
+
+        let mut level = 1;
+        for peek in self.peek_chars(6).iter() {
+            match peek {
+                Some((_, '#')) => {
+                    level += 1;
+                    if level >= 6 {
+                        return false;
+                    }
+                }
+                Some((_, ch)) if ch.is_whitespace() => return true,
+                _ => break,
+            }
+        }
+
+        false
+    }
+
+    fn consume_while<P>(&mut self, mut pred: P)
+    where
+        P: FnMut(&(usize, char)) -> bool,
+    {
+        while let Some(&curr) = self.chars.peek() {
+            if pred(&curr) {
+                self.consume_char();
+            } else {
+                self.consume_char();
+                break;
+            }
+        }
+    }
+
+    fn consume_heading(&mut self) -> Token {
+        let mut level = 1;
+        self.consume_while(|(_, c)| {
+            if *c == '#' {
+                level += 1;
+                assert_ne!(level, 7);
+                return true;
+            }
+            false
+        });
+        self.consume_while(|(_, c)| c.is_whitespace());
+
+        let start = match self.current {
+            Some((idx, _)) => idx,
+            None => return Token::new(Illegal, "".to_string()),
+        };
+        self.consume_while(|(_, c)| *c != '\n');
+
+        // Create a heading token with its level and content
+        Token::new(
+            Heading(HeadingToken { level }),
+            self.source[start..=self.current.unwrap().0]
+                .trim()
+                .split(' ')
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_string(),
+        )
+    }
+
+    fn is_word(&self, ch: char) -> bool {
+        ch.is_alphanumeric() || ch.is_ascii_punctuation()
+    }
+
+    fn consume_word(&mut self) -> String {
+        // Store the start index of the word
+        let start = match self.current {
+            Some((idx, _)) => idx,
+            None => return "".to_string(),
+        };
+
+        // Keep track of the last index of the word
+        let mut end = start;
+
+        // Continue consuming alphanumeric characters
+        while let Some(&(next_idx, next_ch)) = self.chars.peek() {
+            if self.is_word(next_ch) {
+                end = next_idx;
+                // Actually consume the character
+                self.consume_char();
+            } else {
+                break;
+            }
+        }
+
+        // Return the slice representing the full word
+        self.source[start..=end].to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simple() {
+        let input = "hello\n";
+        let lexer = Lexer::new(input);
+        let tokens: Vec<Token> = lexer.collect();
+
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(Word, "hello".to_string()),
+                Token::new(Newline, "\n".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_heading_1() {
+        let input = "# Heading 1";
+        let lexer = Lexer::new(input);
+
+        let tokens: Vec<Token> = lexer.collect();
+
+        assert_eq!(
+            tokens,
+            vec![Token::new(
+                Heading(HeadingToken { level: 1 }),
+                "Heading 1".to_string()
+            ),]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_heading_2() {
+        let input = "## Heading 2";
+        let lexer = Lexer::new(input);
+
+        let tokens: Vec<Token> = lexer.collect();
+
+        assert_eq!(
+            tokens,
+            vec![Token::new(
+                Heading(HeadingToken { level: 2 }),
+                "Heading 2".to_string()
+            ),]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_heading_valid_1() {
+        let input = "  ## Heading";
+        let lexer = Lexer::new(input);
+
+        let tokens: Vec<Token> = lexer.collect();
+
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(Whitespace, " ".to_string()),
+                Token::new(Whitespace, " ".to_string()),
+                Token::new(Heading(HeadingToken { level: 2 }), "Heading".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_heading_multiline() {
+        let input = "\n## Heading";
+        let lexer = Lexer::new(input);
+
+        let tokens: Vec<Token> = lexer.collect();
+
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(Newline, "\n".to_string()),
+                Token::new(Heading(HeadingToken { level: 2 }), "Heading".to_string()),
+            ]
+        );
+    }
+    #[test]
+    fn test_tokenize_heading_invalid_1() {
+        let input = "#Heading";
+        let lexer = Lexer::new(input);
+
+        let tokens: Vec<Token> = lexer.collect();
+
+        assert_eq!(tokens, vec![Token::new(Word, "#Heading".to_string()),]);
+    }
+
+    #[test]
+    fn test_tokenize_heading_invalid_2() {
+        let input = "####### Heading";
+        let lexer = Lexer::new(input);
+
+        let tokens: Vec<Token> = lexer.collect();
+
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(Word, "#######".to_string()),
+                Token::new(Whitespace, " ".to_string()),
+                Token::new(Word, "Heading".to_string())
+            ]
+        );
+    }
+
+    #[ignore = "Not implemented yet"]
+    #[test]
+    fn test_tokenize_heading_invalid_3() {
+        let input = "   ## Heading";
+        let lexer = Lexer::new(input);
+
+        let tokens: Vec<Token> = lexer.collect();
+
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(Whitespace, " ".to_string()),
+                Token::new(Whitespace, " ".to_string()),
+                Token::new(Whitespace, " ".to_string()),
+                Token::new(Word, "##".to_string()),
+                Token::new(Whitespace, " ".to_string()),
+                Token::new(Word, "Heading".to_string())
+            ]
+        );
+    }
+}
