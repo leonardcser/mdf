@@ -1,5 +1,5 @@
-use crate::syntax::tokens::TokenKind::*;
-use crate::syntax::tokens::*;
+use super::tokens::TokenKind::*;
+use super::tokens::*;
 use std::iter::Peekable;
 use std::str::CharIndices;
 
@@ -35,20 +35,6 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn consume_char(&mut self) {
-        self.current = self.chars.next();
-    }
-
-    fn yield_token(&self, kind: TokenKind) -> Token {
-        let start = self.current.unwrap().0;
-        Token::new(kind, self.source[start..start + 1].to_string())
-    }
-
-    fn peek_chars(&self, count: usize) -> Vec<Option<(usize, char)>> {
-        let mut peek_chars = self.chars.clone();
-        (0..count).map(|_| peek_chars.next()).collect()
-    }
-
     fn is_heading(&self) -> bool {
         let (_, ch) = match self.current {
             Some((idx, ch)) => (idx, ch),
@@ -77,20 +63,6 @@ impl<'s> Lexer<'s> {
         false
     }
 
-    fn consume_while<P>(&mut self, mut pred: P)
-    where
-        P: FnMut(&(usize, char)) -> bool,
-    {
-        while let Some(&curr) = self.chars.peek() {
-            if pred(&curr) {
-                self.consume_char();
-            } else {
-                self.consume_char();
-                break;
-            }
-        }
-    }
-
     fn consume_heading(&mut self) -> Token {
         let mut level = 1;
         self.consume_while(|(_, c)| {
@@ -105,7 +77,7 @@ impl<'s> Lexer<'s> {
 
         let start = match self.current {
             Some((idx, _)) => idx,
-            None => return Token::new(Illegal, "".to_string()),
+            None => return Token::new(Illegal, "".into()),
         };
         self.consume_while(|(_, c)| *c != '\n');
 
@@ -118,7 +90,7 @@ impl<'s> Lexer<'s> {
                 .filter(|s| !s.is_empty())
                 .collect::<Vec<_>>()
                 .join(" ")
-                .to_string(),
+                .into(),
         )
     }
 
@@ -130,7 +102,7 @@ impl<'s> Lexer<'s> {
         // Store the start index of the word
         let start = match self.current {
             Some((idx, _)) => idx,
-            None => return "".to_string(),
+            None => return "".into(),
         };
 
         // Keep track of the last index of the word
@@ -148,7 +120,35 @@ impl<'s> Lexer<'s> {
         }
 
         // Return the slice representing the full word
-        self.source[start..=end].to_string()
+        self.source[start..=end].into()
+    }
+
+    fn consume_char(&mut self) {
+        self.current = self.chars.next();
+    }
+
+    fn yield_token(&self, kind: TokenKind) -> Token {
+        let start = self.current.unwrap().0;
+        Token::new(kind, self.source[start..start + 1].into())
+    }
+
+    fn peek_chars(&self, count: usize) -> Vec<Option<(usize, char)>> {
+        let mut peek_chars = self.chars.clone();
+        (0..count).map(|_| peek_chars.next()).collect()
+    }
+
+    fn consume_while<P>(&mut self, mut pred: P)
+    where
+        P: FnMut(&(usize, char)) -> bool,
+    {
+        while let Some(&curr) = self.chars.peek() {
+            if pred(&curr) {
+                self.consume_char();
+            } else {
+                self.consume_char();
+                break;
+            }
+        }
     }
 }
 
@@ -165,8 +165,8 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Word, "hello".to_string()),
-                Token::new(Newline, "\n".to_string()),
+                Token::new(Word, "hello".into()),
+                Token::new(Newline, "\n".into()),
             ]
         );
     }
@@ -182,7 +182,7 @@ mod tests {
             tokens,
             vec![Token::new(
                 Heading(HeadingToken { level: 1 }),
-                "Heading 1".to_string()
+                "Heading 1".into()
             ),]
         );
     }
@@ -198,7 +198,7 @@ mod tests {
             tokens,
             vec![Token::new(
                 Heading(HeadingToken { level: 2 }),
-                "Heading 2".to_string()
+                "Heading 2".into()
             ),]
         );
     }
@@ -213,9 +213,9 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Whitespace, " ".to_string()),
-                Token::new(Whitespace, " ".to_string()),
-                Token::new(Heading(HeadingToken { level: 2 }), "Heading".to_string()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Heading(HeadingToken { level: 2 }), "Heading".into()),
             ]
         );
     }
@@ -230,8 +230,8 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Newline, "\n".to_string()),
-                Token::new(Heading(HeadingToken { level: 2 }), "Heading".to_string()),
+                Token::new(Newline, "\n".into()),
+                Token::new(Heading(HeadingToken { level: 2 }), "Heading".into()),
             ]
         );
     }
@@ -242,7 +242,7 @@ mod tests {
 
         let tokens: Vec<Token> = lexer.collect();
 
-        assert_eq!(tokens, vec![Token::new(Word, "#Heading".to_string()),]);
+        assert_eq!(tokens, vec![Token::new(Word, "#Heading".into()),]);
     }
 
     #[test]
@@ -255,9 +255,9 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Word, "#######".to_string()),
-                Token::new(Whitespace, " ".to_string()),
-                Token::new(Word, "Heading".to_string())
+                Token::new(Word, "#######".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Word, "Heading".into())
             ]
         );
     }
@@ -273,12 +273,12 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Whitespace, " ".to_string()),
-                Token::new(Whitespace, " ".to_string()),
-                Token::new(Whitespace, " ".to_string()),
-                Token::new(Word, "##".to_string()),
-                Token::new(Whitespace, " ".to_string()),
-                Token::new(Word, "Heading".to_string())
+                Token::new(Whitespace, " ".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Word, "##".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Word, "Heading".into())
             ]
         );
     }
