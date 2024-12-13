@@ -1,4 +1,5 @@
 use crate::syntax::lexer::Lexer;
+use crate::syntax::parser::Parser;
 use std::fs::{self, File};
 use std::io::{self, ErrorKind, Read};
 use std::path::{Path, PathBuf};
@@ -15,8 +16,12 @@ pub fn process_file(file: &Path) -> io::Result<()> {
     file.read_to_string(&mut content)?;
 
     let lexer = Lexer::new(&content);
-    let tokens = lexer.collect::<Vec<_>>();
-    dbg!(tokens);
+    // let tokens = lexer.collect::<Vec<_>>();
+    let mut parser = Parser::new(lexer);
+    let res = parser.parse().unwrap();
+    res.iter().for_each(|s| {
+        println!("{}\n", s.to_markdown());
+    });
 
     Ok(())
 }

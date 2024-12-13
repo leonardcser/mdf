@@ -27,11 +27,6 @@ impl Token {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct HeadingToken {
-    pub level: u8,
-}
-
 // #[derive(Debug, PartialEq, Clone)]
 // pub enum Token {
 //     Paragraph(ParagraphToken),
