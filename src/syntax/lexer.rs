@@ -7,6 +7,8 @@ pub struct Lexer<'s> {
     source: &'s str,
     chars: Peekable<CharIndices<'s>>,
     current: Option<(usize, char)>,
+    line: usize,
+    col: usize,
 }
 
 impl<'s> Iterator for Lexer<'s> {
@@ -16,9 +18,13 @@ impl<'s> Iterator for Lexer<'s> {
         self.consume_char();
         let (_start, ch) = self.current?;
         let token = match ch {
-            '\n' => self.yield_token(Newline),
+            '\n' => {
+                self.col = 1;
+                self.line += 1;
+                self.yield_token(Newline)
+            }
             ' ' => self.yield_token(Whitespace),
-            _ if self.is_heading() => self.consume_heading(),
+            '#' if self.is_hashtag() => self.yield_token(Hashtag),
             ch if self.is_word(ch) => Token::new(Word, self.consume_word()),
             _ => self.yield_token(Illegal),
         };
@@ -32,66 +38,18 @@ impl<'s> Lexer<'s> {
             source: string,
             chars: string.char_indices().peekable(),
             current: None,
+            line: 1,
+            col: 1,
         }
     }
 
-    fn is_heading(&self) -> bool {
-        let (_, ch) = match self.current {
-            Some((idx, ch)) => (idx, ch),
-            None => return false,
-        };
-
-        // If not at the start, check if preceded by a newline
-        if ch != '#' {
-            return false;
-        }
-
-        let mut level = 1;
-        for peek in self.peek_chars(6).iter() {
-            match peek {
-                Some((_, '#')) => {
-                    level += 1;
-                    if level >= 6 {
-                        return false;
-                    }
-                }
-                Some((_, ch)) if ch.is_whitespace() => return true,
-                _ => break,
-            }
-        }
-
-        false
-    }
-
-    fn consume_heading(&mut self) -> Token {
-        let mut level = 1;
-        self.consume_while(|(_, c)| {
-            if *c == '#' {
-                level += 1;
-                assert_ne!(level, 7);
+    fn is_hashtag(&mut self) -> bool {
+        if let Some(&(_, next_ch)) = self.chars.peek() {
+            if next_ch == '#' || next_ch.is_whitespace() {
                 return true;
             }
-            false
-        });
-        self.consume_while(|(_, c)| c.is_whitespace());
-
-        let start = match self.current {
-            Some((idx, _)) => idx,
-            None => return Token::new(Illegal, "".into()),
-        };
-        self.consume_while(|(_, c)| *c != '\n');
-
-        // Create a heading token with its level and content
-        Token::new(
-            Heading(HeadingToken { level }),
-            self.source[start..=self.current.unwrap().0]
-                .trim()
-                .split(' ')
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(" ")
-                .into(),
-        )
+        }
+        return false;
     }
 
     fn is_word(&self, ch: char) -> bool {
@@ -125,6 +83,7 @@ impl<'s> Lexer<'s> {
 
     fn consume_char(&mut self) {
         self.current = self.chars.next();
+        self.col += 1;
     }
 
     fn yield_token(&self, kind: TokenKind) -> Token {
@@ -132,24 +91,23 @@ impl<'s> Lexer<'s> {
         Token::new(kind, self.source[start..start + 1].into())
     }
 
-    fn peek_chars(&self, count: usize) -> Vec<Option<(usize, char)>> {
-        let mut peek_chars = self.chars.clone();
-        (0..count).map(|_| peek_chars.next()).collect()
-    }
-
-    fn consume_while<P>(&mut self, mut pred: P)
-    where
-        P: FnMut(&(usize, char)) -> bool,
-    {
-        while let Some(&curr) = self.chars.peek() {
-            if pred(&curr) {
-                self.consume_char();
-            } else {
-                self.consume_char();
-                break;
-            }
-        }
-    }
+    // fn peek_chars(&self, count: usize) -> Vec<Option<(usize, char)>> {
+    //     let mut peek_chars = self.chars.clone();
+    //     (0..count).map(|_| peek_chars.next()).collect()
+    // }
+    //
+    // fn consume_while<P>(&mut self, mut pred: P)
+    // where
+    //     P: FnMut(&(usize, char)) -> bool,
+    // {
+    //     while let Some(&curr) = self.chars.peek() {
+    //         if pred(&curr) {
+    //             self.consume_char();
+    //         } else {
+    //             break;
+    //         }
+    //     }
+    // }
 }
 
 #[cfg(test)]
@@ -180,10 +138,13 @@ mod tests {
 
         assert_eq!(
             tokens,
-            vec![Token::new(
-                Heading(HeadingToken { level: 1 }),
-                "Heading 1".into()
-            ),]
+            vec![
+                Token::new(Hashtag, "#".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Word, "Heading".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Word, "1".into()),
+            ]
         );
     }
 
@@ -196,10 +157,14 @@ mod tests {
 
         assert_eq!(
             tokens,
-            vec![Token::new(
-                Heading(HeadingToken { level: 2 }),
-                "Heading 2".into()
-            ),]
+            vec![
+                Token::new(Hashtag, "#".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Word, "Heading".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Word, "2".into()),
+            ]
         );
     }
 
@@ -215,7 +180,10 @@ mod tests {
             vec![
                 Token::new(Whitespace, " ".into()),
                 Token::new(Whitespace, " ".into()),
-                Token::new(Heading(HeadingToken { level: 2 }), "Heading".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Word, "Heading".into()),
             ]
         );
     }
@@ -231,7 +199,10 @@ mod tests {
             tokens,
             vec![
                 Token::new(Newline, "\n".into()),
-                Token::new(Heading(HeadingToken { level: 2 }), "Heading".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Whitespace, " ".into()),
+                Token::new(Word, "Heading".into()),
             ]
         );
     }
@@ -255,14 +226,19 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Word, "#######".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Hashtag, "#".into()),
                 Token::new(Whitespace, " ".into()),
                 Token::new(Word, "Heading".into())
             ]
         );
     }
 
-    #[ignore = "Not implemented yet"]
     #[test]
     fn test_tokenize_heading_invalid_3() {
         let input = "   ## Heading";
@@ -276,7 +252,8 @@ mod tests {
                 Token::new(Whitespace, " ".into()),
                 Token::new(Whitespace, " ".into()),
                 Token::new(Whitespace, " ".into()),
-                Token::new(Word, "##".into()),
+                Token::new(Hashtag, "#".into()),
+                Token::new(Hashtag, "#".into()),
                 Token::new(Whitespace, " ".into()),
                 Token::new(Word, "Heading".into())
             ]

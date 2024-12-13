@@ -2,21 +2,17 @@
 pub enum TokenKind {
     // Special
     Illegal,
-    // Multiline
-    FrontMatter,
-    CodeBlock,
-    // Single line
-    Heading(HeadingToken),
     // Slices
     Word, // Normal words + bolds / italics
-    InlineCode,
-    Link,
-    ListStart,
-    ListEnd,
-    // Extras
+    // Link,
+    Hashtag,
+    // ListStart,
+    // FrontMatterDel,
+    // CodeBlockDel,
+    // Syntax
     Newline,
     Whitespace,
-    Comment,
+    // Comment,
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -19,4 +19,24 @@ impl<I: Iterator<Item = Token>> Parser<I> {
             processed_tokens: vec![],
         }
     }
+
+    // pub fn parse(&mut self) -> Result<Vec<Stmt>, Vec<SyntaxError>> {
+    //     let mut statements = vec![];
+    //     let mut errors = vec![];
+    //     while !self.at_end() {
+    //         let stmt = self.declaration();
+    //         if let Ok(val) = stmt {
+    //             statements.push(val);
+    //         } else {
+    //             if let Err(e) = stmt {
+    //                 println!("[line {}] {}", e.line, e.msg.to_string());
+    //                 errors.push(e);
+    //             }
+    //         }
+    //     }
+    //     if errors.is_empty() {
+    //         return Ok(statements);
+    //     }
+    //     Err(errors)
+    // }
 }
