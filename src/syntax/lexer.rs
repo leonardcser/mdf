@@ -1,5 +1,5 @@
-use crate::lexer::tokens::TokenKind::*;
-use crate::lexer::tokens::*;
+use crate::syntax::tokens::TokenKind::*;
+use crate::syntax::tokens::*;
 use std::iter::Peekable;
 use std::str::CharIndices;
 

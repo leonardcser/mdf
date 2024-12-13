@@ -1,5 +1,5 @@
 mod io;
-mod lexer;
+mod syntax;
 
 use clap::Parser;
 use std::process;

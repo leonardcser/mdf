@@ -1,4 +1,4 @@
-use crate::lexer::lexer::Lexer;
+use crate::syntax::lexer::Lexer;
 use std::fs::{self, File};
 use std::io::{self, ErrorKind, Read};
 use std::path::{Path, PathBuf};
