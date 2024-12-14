@@ -88,7 +88,6 @@ impl<'s> Lexer<'s> {
         }
 
         // Return the slice representing the full word
-        dbg!(start, end, &self.source[start..=end]);
         self.source[start..=end].into()
     }
 
