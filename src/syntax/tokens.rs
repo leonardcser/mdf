@@ -19,11 +19,12 @@ pub enum TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub text: String,
+    pub pos: (usize, usize),
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, text: String) -> Self {
-        Self { kind, text }
+    pub fn new(kind: TokenKind, text: String, pos: (usize, usize)) -> Self {
+        Self { kind, text, pos }
     }
 }
 

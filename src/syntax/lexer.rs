@@ -3,6 +3,7 @@ use super::tokens::*;
 use std::iter::Peekable;
 use std::str::CharIndices;
 
+#[derive(Clone, Debug)]
 pub struct Lexer<'s> {
     source: &'s str,
     chars: Peekable<CharIndices<'s>>,
@@ -19,13 +20,17 @@ impl<'s> Iterator for Lexer<'s> {
         let (_start, ch) = self.current?;
         let token = match ch {
             '\n' => {
-                self.col = 1;
+                let t = self.yield_token(Newline);
+                self.col = 0;
                 self.line += 1;
-                self.yield_token(Newline)
+                t
             }
             ' ' => self.yield_token(Whitespace),
             '#' if self.is_hashtag() => self.yield_token(Hashtag),
-            ch if self.is_word(ch) => Token::new(Word, self.consume_word()),
+            ch if self.is_word(ch) => {
+                let pos = (self.line, self.col);
+                Token::new(Word, self.consume_word(), pos)
+            }
             _ => self.yield_token(Illegal),
         };
         Some(token)
@@ -39,7 +44,7 @@ impl<'s> Lexer<'s> {
             chars: string.char_indices().peekable(),
             current: None,
             line: 1,
-            col: 1,
+            col: 0,
         }
     }
 
@@ -58,26 +63,32 @@ impl<'s> Lexer<'s> {
 
     fn consume_word(&mut self) -> String {
         // Store the start index of the word
-        let start = match self.current {
-            Some((idx, _)) => idx,
+        let (start, ch) = match self.current {
+            Some((idx, ch)) => (idx, ch),
             None => return "".into(),
         };
 
         // Keep track of the last index of the word
-        let mut end = start;
+        let mut end = start + ch.len_utf8() - 1;
 
         // Continue consuming alphanumeric characters
         while let Some(&(next_idx, next_ch)) = self.chars.peek() {
             if self.is_word(next_ch) {
-                end = next_idx;
+                let len = next_ch.len_utf8();
+                end = next_idx + len - 1;
                 // Actually consume the character
-                self.consume_char();
+                let tmp_col = self.col;
+                for _ in 0..len {
+                    self.consume_char();
+                }
+                self.col = tmp_col + 1;
             } else {
                 break;
             }
         }
 
         // Return the slice representing the full word
+        dbg!(start, end, &self.source[start..=end]);
         self.source[start..=end].into()
     }
 
@@ -87,26 +98,17 @@ impl<'s> Lexer<'s> {
     }
 
     fn yield_token(&self, kind: TokenKind) -> Token {
-        let start = self.current.unwrap().0;
-        Token::new(kind, self.source[start..start + 1].into())
+        let (start, ch) = self.current.unwrap();
+        Token::new(
+            kind,
+            self.source[start..start + ch.len_utf8()].into(),
+            (self.line, self.col),
+        )
     }
 
     // fn peek_chars(&self, count: usize) -> Vec<Option<(usize, char)>> {
     //     let mut peek_chars = self.chars.clone();
     //     (0..count).map(|_| peek_chars.next()).collect()
-    // }
-    //
-    // fn consume_while<P>(&mut self, mut pred: P)
-    // where
-    //     P: FnMut(&(usize, char)) -> bool,
-    // {
-    //     while let Some(&curr) = self.chars.peek() {
-    //         if pred(&curr) {
-    //             self.consume_char();
-    //         } else {
-    //             break;
-    //         }
-    //     }
     // }
 }
 
@@ -123,8 +125,23 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Word, "hello".into()),
-                Token::new(Newline, "\n".into()),
+                Token::new(Word, "hello".into(), (1, 1)),
+                Token::new(Newline, "\n".into(), (1, 6)),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_word_1() {
+        let input = "```rust\n";
+        let lexer = Lexer::new(input);
+        let tokens: Vec<Token> = lexer.collect();
+
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(Word, "```rust".into(), (1, 1)),
+                Token::new(Newline, "\n".into(), (1, 8)),
             ]
         );
     }
@@ -139,11 +156,11 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Hashtag, "#".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Word, "Heading".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Word, "1".into()),
+                Token::new(Hashtag, "#".into(), (1, 1)),
+                Token::new(Whitespace, " ".into(), (1, 2)),
+                Token::new(Word, "Heading".into(), (1, 3)),
+                Token::new(Whitespace, " ".into(), (1, 10)),
+                Token::new(Word, "1".into(), (1, 11)),
             ]
         );
     }
@@ -158,12 +175,12 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Hashtag, "#".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Word, "Heading".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Word, "2".into()),
+                Token::new(Hashtag, "#".into(), (1, 1)),
+                Token::new(Hashtag, "#".into(), (1, 2)),
+                Token::new(Whitespace, " ".into(), (1, 3)),
+                Token::new(Word, "Heading".into(), (1, 4)),
+                Token::new(Whitespace, " ".into(), (1, 11)),
+                Token::new(Word, "2".into(), (1, 12)),
             ]
         );
     }
@@ -178,12 +195,12 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Whitespace, " ".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Word, "Heading".into()),
+                Token::new(Whitespace, " ".into(), (1, 1)),
+                Token::new(Whitespace, " ".into(), (1, 2)),
+                Token::new(Hashtag, "#".into(), (1, 3)),
+                Token::new(Hashtag, "#".into(), (1, 4)),
+                Token::new(Whitespace, " ".into(), (1, 5)),
+                Token::new(Word, "Heading".into(), (1, 6)),
             ]
         );
     }
@@ -198,11 +215,11 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Newline, "\n".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Word, "Heading".into()),
+                Token::new(Newline, "\n".into(), (1, 1)),
+                Token::new(Hashtag, "#".into(), (2, 1)),
+                Token::new(Hashtag, "#".into(), (2, 2)),
+                Token::new(Whitespace, " ".into(), (2, 3)),
+                Token::new(Word, "Heading".into(), (2, 4)),
             ]
         );
     }
@@ -213,7 +230,7 @@ mod tests {
 
         let tokens: Vec<Token> = lexer.collect();
 
-        assert_eq!(tokens, vec![Token::new(Word, "#Heading".into()),]);
+        assert_eq!(tokens, vec![Token::new(Word, "#Heading".into(), (1, 1)),]);
     }
 
     #[test]
@@ -226,15 +243,15 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Hashtag, "#".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Word, "Heading".into())
+                Token::new(Hashtag, "#".into(), (1, 1)),
+                Token::new(Hashtag, "#".into(), (1, 2)),
+                Token::new(Hashtag, "#".into(), (1, 3)),
+                Token::new(Hashtag, "#".into(), (1, 4)),
+                Token::new(Hashtag, "#".into(), (1, 5)),
+                Token::new(Hashtag, "#".into(), (1, 6)),
+                Token::new(Hashtag, "#".into(), (1, 7)),
+                Token::new(Whitespace, " ".into(), (1, 8)),
+                Token::new(Word, "Heading".into(), (1, 9))
             ]
         );
     }
@@ -249,13 +266,13 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(Whitespace, " ".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Hashtag, "#".into()),
-                Token::new(Whitespace, " ".into()),
-                Token::new(Word, "Heading".into())
+                Token::new(Whitespace, " ".into(), (1, 1)),
+                Token::new(Whitespace, " ".into(), (1, 2)),
+                Token::new(Whitespace, " ".into(), (1, 3)),
+                Token::new(Hashtag, "#".into(), (1, 4)),
+                Token::new(Hashtag, "#".into(), (1, 5)),
+                Token::new(Whitespace, " ".into(), (1, 6)),
+                Token::new(Word, "Heading".into(), (1, 7))
             ]
         );
     }
